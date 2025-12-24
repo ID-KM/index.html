@@ -13,23 +13,41 @@
         .msg { max-width: 75%; padding: 10px; border-radius: 10px; font-size: 15px; position: relative; word-wrap: break-word; }
         .sent { align-self: flex-end; background: #dcf8c6; border-top-left-radius: 10px; }
         .received { align-self: flex-start; background: #ffffff; border-top-right-radius: 10px; }
-        img { max-width: 100%; border-radius: 8px; margin-top: 5px; cursor: pointer; display: block; }
+        img { max-width: 100%; border-radius: 8px; margin-top: 5px; cursor: pointer; display: block; background: #eee; min-height: 50px; }
         #input-area { background: #f0f0f0; padding: 12px; display: flex; gap: 10px; align-items: center; }
         input { flex: 1; padding: 12px; border: none; border-radius: 25px; outline: none; font-size: 16px; }
         button { background: #075e54; color: white; border: none; width: 45px; height: 45px; border-radius: 50%; cursor: pointer; font-size: 20px; display: flex; align-items: center; justify-content: center; }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #075e54; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1000; color: white; }
     </style>
 </head>
 <body>
 
+<div id="lock-screen" class="overlay">
+    <h2>غرفة خاصة</h2>
+    <input type="password" id="passInput" placeholder="أدخل كلمة السر" style="flex: none; width: 200px; margin-bottom: 10px;">
+    <button onclick="checkPass()" style="width: 100px; border-radius: 5px;">دخول</button>
+</div>
+
 <div id="header">المحادثة المباشرة 🟢</div>
-<div id="chat-window" id="display"></div>
+<div id="chat-window"></div>
 <div id="input-area">
-    <input type="text" id="msgInput" placeholder="اكتب رسالة أو رابط صورة...">
+    <input type="text" id="msgInput" placeholder="اكتب رسالة أو الصق رابط صورة مباشرة...">
     <button onclick="send()">></button>
 </div>
 
 <script>
-    // بيانات مشروعك التي ظهرت في الصورة الأخيرة
+    // كلمة السر التي اخترتها لك هي 1234 (يمكنك تغييرها في السطر القادم)
+    const MY_PASSWORD = "1234";
+
+    function checkPass() {
+        const input = document.getElementById('passInput').value;
+        if (input === MY_PASSWORD) {
+            document.getElementById('lock-screen').style.display = 'none';
+        } else {
+            alert("كلمة سر خاطئة!");
+        }
+    }
+
     const firebaseConfig = {
         apiKey: "AIzaSyBwQ4FDlDR1bzDIHIx5Mhh92shCXrQk7xg",
         authDomain: "mychat-fb8a2.firebaseapp.com",
@@ -42,7 +60,6 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    // تحديد المستخدم من الرابط (A أو B)
     const urlParams = new URLSearchParams(window.location.search);
     const currentUser = urlParams.get('u') || "A"; 
 
@@ -58,7 +75,6 @@
         }
     }
 
-    // الاستماع للرسائل وعرضها فوراً
     db.collection("messages").orderBy("time").onSnapshot(snapshot => {
         const win = document.getElementById('chat-window');
         win.innerHTML = "";
@@ -67,8 +83,9 @@
             const div = document.createElement('div');
             div.className = `msg ${data.user === currentUser ? 'sent' : 'received'}`;
             
-            // فحص إذا كانت الرسالة رابط صورة
-            if(data.text.match(/\.(jpeg|jpg|gif|png|webp)$/) != null || data.text.includes("images")){
+            // نظام ذكي للتعرف على روابط الصور وعرضها
+            const urlPattern = /(https?:\/\/.*\.(?:png|jpg|jpeg|gif|webp|svg))/i;
+            if (urlPattern.test(data.text)) {
                 div.innerHTML = `<img src="${data.text}" onclick="window.open('${data.text}')">`;
             } else {
                 div.innerText = data.text;
@@ -78,7 +95,6 @@
         win.scrollTop = win.scrollHeight;
     });
 
-    // إرسال عند الضغط على Enter
     document.getElementById("msgInput").addEventListener("keyup", function(event) {
         if (event.key === "Enter") send();
     });
