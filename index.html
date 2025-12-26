@@ -16,6 +16,7 @@
             --incoming-msg: #202c33;
             --text-main: #e9edef;
             --text-muted: #8696a0;
+            --danger-color: #ef5350;
         }
 
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -138,7 +139,7 @@
             gap: 12px;
         }
 
-        .msg-container { display: flex; flex-direction: column; max-width: 75%; transition: all 0.3s ease; }
+        .msg-container { display: flex; flex-direction: column; max-width: 75%; transition: all 0.3s ease; position: relative; }
         
         .msg-container.sent { align-self: flex-end; align-items: flex-end; }
         .msg-container.received { align-self: flex-start; align-items: flex-start; }
@@ -156,6 +157,7 @@
             position: relative;
             box-shadow: 0 1px 2px rgba(0,0,0,0.2);
             color: white;
+            word-break: break-word;
         }
 
         .received .msg-bubble { border-top-right-radius: 8px; border-top-left-radius: 0; }
@@ -165,7 +167,21 @@
         #chat-window.flipped .sent .msg-bubble { border-top-right-radius: 8px; border-top-left-radius: 0; }
 
         .msg-bubble img { max-width: 100%; border-radius: 6px; margin: 5px 0; display: block; }
-        .timestamp { font-size: 0.6rem; color: rgba(255,255,255,0.5); text-align: left; margin-top: 4px; }
+        .timestamp { font-size: 0.6rem; color: rgba(255,255,255,0.5); text-align: left; margin-top: 4px; display: flex; justify-content: space-between; align-items: center; }
+
+        .msg-bubble a { color: #53bdeb; text-decoration: underline; }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--danger-color);
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-right: 10px;
+            opacity: 0.6;
+            transition: 0.2s;
+        }
+        .delete-btn:hover { opacity: 1; transform: scale(1.1); }
 
         footer {
             background: var(--panel-bg);
@@ -189,7 +205,6 @@
 </head>
 <body>
 
-<!-- الأصوات -->
 <audio id="receiveSound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
 <audio id="sendSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" preload="auto"></audio>
 
@@ -197,7 +212,6 @@
     <div class="lock-card">
         <i class="fas fa-comments" style="font-size: 3rem; color: var(--primary-color);"></i>
         <h2 style="margin:15px 0">مرحباً بك في المحادثة</h2>
-        <!-- تغيير الحقل إلى password وإخفاء التلميح -->
         <input type="password" id="passInput" placeholder="كلمة المرور">
         <input type="text" id="nameInput" placeholder="اكتب اسمك ليظهر للآخرين">
         <button onclick="checkAccess()" style="background:var(--primary-color); color:white; width:100%; padding:12px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; margin-top:10px">بدء الدردشة</button>
@@ -278,7 +292,8 @@
     const db = firebase.firestore();
 
     const urlParams = new URLSearchParams(window.location.search);
-    const currentUserID = urlParams.get('u') || Math.random().toString(36).substring(7);
+    const currentUserID = urlParams.get('u') || localStorage.getItem('nexus_uid') || Math.random().toString(36).substring(7);
+    localStorage.setItem('nexus_uid', currentUserID);
 
     const savedName = localStorage.getItem('nexus_user_name');
     if(savedName) document.getElementById('nameInput').value = savedName;
@@ -313,6 +328,12 @@
         }, 200);
     }
 
+    // دالة لتحويل النصوص إلى روابط تفتح في نافذة جديدة
+    function linkify(text) {
+        const urlPattern = /(\b(https?|ftp|file):\/\/[-A-Z0-9+&@#\/%?=~_|!:,.;]*[-A-Z0-9+&@#\/%=~_|])/ig;
+        return text.replace(urlPattern, '<a href="$1" target="_blank">$1</a>');
+    }
+
     function send(content = null) {
         const text = content || document.getElementById('msgInput').value;
         if(text.trim()){
@@ -323,9 +344,14 @@
                 color: mySelectedColor, 
                 time: firebase.firestore.FieldValue.serverTimestamp()
             });
-            // تشغيل صوت الإرسال
             document.getElementById('sendSound').play().catch(e => {});
             if(!content) document.getElementById('msgInput').value = "";
+        }
+    }
+
+    function deleteMessage(id) {
+        if(confirm("هل تريد حقاً حذف هذه الرسالة؟")) {
+            db.collection("messages").doc(id).delete();
         }
     }
 
@@ -335,9 +361,8 @@
         
         if (lastMsgCount !== 0 && newMsgsCount > lastMsgCount) {
             const lastMsg = snapshot.docs[snapshot.docs.length - 1].data();
-            // تشغيل صوت الاستقبال إذا كانت الرسالة من شخص آخر
             if (lastMsg.user !== currentUserID) {
-                document.getElementById('receiveSound').play().catch(e => console.log("Sound blocked"));
+                document.getElementById('receiveSound').play().catch(e => {});
             }
         }
         lastMsgCount = newMsgsCount;
@@ -345,6 +370,7 @@
         win.innerHTML = "";
         snapshot.forEach(doc => {
             const data = doc.data();
+            const id = doc.id;
             const isMe = data.user === currentUserID;
             const msgTime = data.time ? new Date(data.time.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
             const bubbleColor = isMe ? (data.color || mySelectedColor) : (data.color || "#202c33");
@@ -356,14 +382,19 @@
             if (data.text.startsWith('data:image') || data.text.match(/\.(jpeg|jpg|gif|png|webp)$/i)) {
                 contentHtml = `<img src="${data.text}" onclick="window.open('${data.text}')">`;
             } else {
-                contentHtml = `<span>${data.text}</span>`;
+                contentHtml = `<span>${linkify(data.text)}</span>`;
             }
+
+            const deleteHtml = isMe ? `<button class="delete-btn" onclick="deleteMessage('${id}')"><i class="fas fa-trash"></i></button>` : "";
 
             container.innerHTML = `
                 <span class="sender-name">${data.userName || "مجهول"}</span>
                 <div class="msg-bubble" style="background-color: ${bubbleColor}">
                     ${contentHtml}
-                    <div class="timestamp">${msgTime}</div>
+                    <div class="timestamp">
+                        ${msgTime}
+                        ${deleteHtml}
+                    </div>
                 </div>
             `;
             win.appendChild(container);
