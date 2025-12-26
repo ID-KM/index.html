@@ -189,14 +189,16 @@
 </head>
 <body>
 
-<!-- صوت التنبيه -->
-<audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
+<!-- الأصوات -->
+<audio id="receiveSound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
+<audio id="sendSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3" preload="auto"></audio>
 
 <div id="lock-screen">
     <div class="lock-card">
         <i class="fas fa-comments" style="font-size: 3rem; color: var(--primary-color);"></i>
         <h2 style="margin:15px 0">مرحباً بك في المحادثة</h2>
-        <input type="password" id="passInput" placeholder="كلمة المرور (1234)">
+        <!-- تغيير الحقل إلى password وإخفاء التلميح -->
+        <input type="password" id="passInput" placeholder="كلمة المرور">
         <input type="text" id="nameInput" placeholder="اكتب اسمك ليظهر للآخرين">
         <button onclick="checkAccess()" style="background:var(--primary-color); color:white; width:100%; padding:12px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; margin-top:10px">بدء الدردشة</button>
     </div>
@@ -321,6 +323,8 @@
                 color: mySelectedColor, 
                 time: firebase.firestore.FieldValue.serverTimestamp()
             });
+            // تشغيل صوت الإرسال
+            document.getElementById('sendSound').play().catch(e => {});
             if(!content) document.getElementById('msgInput').value = "";
         }
     }
@@ -331,8 +335,9 @@
         
         if (lastMsgCount !== 0 && newMsgsCount > lastMsgCount) {
             const lastMsg = snapshot.docs[snapshot.docs.length - 1].data();
+            // تشغيل صوت الاستقبال إذا كانت الرسالة من شخص آخر
             if (lastMsg.user !== currentUserID) {
-                document.getElementById('notifSound').play().catch(e => console.log("Sound blocked"));
+                document.getElementById('receiveSound').play().catch(e => console.log("Sound blocked"));
             }
         }
         lastMsgCount = newMsgsCount;
