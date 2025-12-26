@@ -31,7 +31,7 @@
             overflow: hidden;
         }
 
-        /* شاشة القفل */
+        /* شاشة القفل وإدخال الاسم */
         #lock-screen {
             position: fixed;
             inset: 0;
@@ -57,7 +57,7 @@
         .lock-card input {
             width: 100%;
             padding: 12px;
-            margin: 1rem 0;
+            margin: 0.5rem 0;
             border-radius: 8px;
             border: 1px solid #333;
             background: #2a3942;
@@ -113,7 +113,6 @@
         }
         .color-option.active { border-color: white; transform: scale(1.2); }
 
-        /* زر عكس الاتجاه */
         .flip-btn {
             background: transparent;
             border: 1px solid var(--text-muted);
@@ -141,11 +140,9 @@
 
         .msg-container { display: flex; flex-direction: column; max-width: 75%; transition: all 0.3s ease; }
         
-        /* الوضع الطبيعي (الافتراضي) */
         .msg-container.sent { align-self: flex-end; align-items: flex-end; }
         .msg-container.received { align-self: flex-start; align-items: flex-start; }
 
-        /* الوضع المعكوس (عند تفعيل الزر) */
         #chat-window.flipped .msg-container.sent { align-self: flex-start; align-items: flex-start; }
         #chat-window.flipped .msg-container.received { align-self: flex-end; align-items: flex-end; }
 
@@ -161,11 +158,9 @@
             color: white;
         }
 
-        /* زوايا الفقاعات في الوضع الطبيعي */
         .received .msg-bubble { border-top-right-radius: 8px; border-top-left-radius: 0; }
         .sent .msg-bubble { border-top-left-radius: 8px; border-top-right-radius: 0; }
 
-        /* زوايا الفقاعات في الوضع المعكوس */
         #chat-window.flipped .received .msg-bubble { border-top-left-radius: 8px; border-top-right-radius: 0; }
         #chat-window.flipped .sent .msg-bubble { border-top-right-radius: 8px; border-top-left-radius: 0; }
 
@@ -194,12 +189,16 @@
 </head>
 <body>
 
+<!-- صوت التنبيه -->
+<audio id="notifSound" src="https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3" preload="auto"></audio>
+
 <div id="lock-screen">
     <div class="lock-card">
-        <i class="fas fa-user-shield" style="font-size: 3rem; color: var(--primary-color);"></i>
-        <h2 style="margin-top:10px">تواصل آمن</h2>
-        <input type="password" id="passInput" placeholder="أدخل كلمة المرور">
-        <button onclick="checkPass()" style="background:var(--primary-color); color:white; width:100%; padding:12px; border:none; border-radius:8px; cursor:pointer;">دخول</button>
+        <i class="fas fa-comments" style="font-size: 3rem; color: var(--primary-color);"></i>
+        <h2 style="margin:15px 0">مرحباً بك في المحادثة</h2>
+        <input type="password" id="passInput" placeholder="كلمة المرور (1234)">
+        <input type="text" id="nameInput" placeholder="اكتب اسمك ليظهر للآخرين">
+        <button onclick="checkAccess()" style="background:var(--primary-color); color:white; width:100%; padding:12px; border:none; border-radius:8px; cursor:pointer; font-weight:bold; margin-top:10px">بدء الدردشة</button>
     </div>
 </div>
 
@@ -208,19 +207,17 @@
         <div class="header-left">
             <div class="avatar" id="userAvatar">N</div>
             <div class="user-info">
-                <h3 id="chatPartner">صديقي</h3>
-                <p>متصل الآن</p>
+                <h3 id="chatPartner">غرفة المحادثة</h3>
+                <p>تشفير تام بين الأطراف</p>
             </div>
         </div>
         
         <div class="header-tools">
-            <!-- زر تبديل الاتجاه -->
             <button class="flip-btn" id="flipBtn" onclick="toggleLayout()" title="عكس اتجاه المحادثة">
                 <i class="fas fa-exchange-alt"></i>
             </button>
 
             <div class="color-picker">
-                <!-- خيارات الألوان -->
                 <div class="color-option active" data-color="#005c4b" style="background: #005c4b;" onclick="selectColor('#005c4b', this)"></div>
                 <div class="color-option" data-color="#004b5c" style="background: #004b5c;" onclick="selectColor('#004b5c', this)"></div>
                 <div class="color-option" data-color="#5c003a" style="background: #5c003a;" onclick="selectColor('#5c003a', this)"></div>
@@ -246,11 +243,24 @@
 <script>
     const MY_PASSWORD = "1234";
     let mySelectedColor = "#005c4b"; 
+    let myDisplayName = "مجهول";
+    let lastMsgCount = 0;
 
-    function checkPass() {
-        if (document.getElementById('passInput').value === MY_PASSWORD) {
+    function checkAccess() {
+        const pass = document.getElementById('passInput').value;
+        const name = document.getElementById('nameInput').value.trim();
+        
+        if (pass === MY_PASSWORD) {
+            if (name === "") {
+                alert("يرجى إدخال اسمك أولاً");
+                return;
+            }
+            myDisplayName = name;
+            localStorage.setItem('nexus_user_name', name);
             document.getElementById('lock-screen').style.display = 'none';
-        } else { alert("خطأ"); }
+        } else { 
+            alert("كلمة المرور غير صحيحة"); 
+        }
     }
 
     const firebaseConfig = {
@@ -266,32 +276,24 @@
     const db = firebase.firestore();
 
     const urlParams = new URLSearchParams(window.location.search);
-    const currentUser = urlParams.get('u') || "A";
-    const myName = currentUser === "A" ? "أنا (A)" : "أنا (B)";
-    const partnerName = currentUser === "A" ? "صديقي (B)" : "صديقي (A)";
+    const currentUserID = urlParams.get('u') || Math.random().toString(36).substring(7);
 
-    document.getElementById('userAvatar').innerText = currentUser;
-    document.getElementById('chatPartner').innerText = partnerName;
+    const savedName = localStorage.getItem('nexus_user_name');
+    if(savedName) document.getElementById('nameInput').value = savedName;
 
-    // --- وظيفة عكس الاتجاه ---
     function toggleLayout() {
         const chatWin = document.getElementById('chat-window');
         const btn = document.getElementById('flipBtn');
-        
         chatWin.classList.toggle('flipped');
         btn.classList.toggle('active');
-
-        // حفظ التفضيل
         localStorage.setItem('nexus_chat_flipped', chatWin.classList.contains('flipped'));
     }
 
-    // استعادة وضع الاتجاه المحفوظ
     if (localStorage.getItem('nexus_chat_flipped') === 'true') {
         document.getElementById('chat-window').classList.add('flipped');
         document.getElementById('flipBtn').classList.add('active');
     }
 
-    // --- وظائف الألوان ---
     function selectColor(color, el) {
         mySelectedColor = color;
         document.querySelectorAll('.color-option').forEach(opt => opt.classList.remove('active'));
@@ -305,7 +307,6 @@
         setTimeout(() => {
             document.querySelectorAll('.color-option').forEach(opt => {
                 if(opt.getAttribute('data-color') === savedColor) opt.classList.add('active');
-                else opt.classList.remove('active');
             });
         }, 200);
     }
@@ -315,8 +316,8 @@
         if(text.trim()){
             db.collection("messages").add({
                 text: text,
-                user: currentUser,
-                userName: myName,
+                user: currentUserID,
+                userName: myDisplayName,
                 color: mySelectedColor, 
                 time: firebase.firestore.FieldValue.serverTimestamp()
             });
@@ -326,11 +327,20 @@
 
     db.collection("messages").orderBy("time").onSnapshot(snapshot => {
         const win = document.getElementById('chat-window');
+        let newMsgsCount = snapshot.size;
+        
+        if (lastMsgCount !== 0 && newMsgsCount > lastMsgCount) {
+            const lastMsg = snapshot.docs[snapshot.docs.length - 1].data();
+            if (lastMsg.user !== currentUserID) {
+                document.getElementById('notifSound').play().catch(e => console.log("Sound blocked"));
+            }
+        }
+        lastMsgCount = newMsgsCount;
+
         win.innerHTML = "";
         snapshot.forEach(doc => {
             const data = doc.data();
-            const isMe = data.user === currentUser;
-            const displaySender = isMe ? data.userName : (data.userName || partnerName);
+            const isMe = data.user === currentUserID;
             const msgTime = data.time ? new Date(data.time.toDate()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "";
             const bubbleColor = isMe ? (data.color || mySelectedColor) : (data.color || "#202c33");
 
@@ -345,7 +355,7 @@
             }
 
             container.innerHTML = `
-                <span class="sender-name">${displaySender}</span>
+                <span class="sender-name">${data.userName || "مجهول"}</span>
                 <div class="msg-bubble" style="background-color: ${bubbleColor}">
                     ${contentHtml}
                     <div class="timestamp">${msgTime}</div>
